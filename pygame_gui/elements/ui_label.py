@@ -2,12 +2,12 @@ import warnings
 from typing import Union, Tuple, Dict
 
 import pygame
+from pygame_gui.core.utility import translate
 
 from pygame_gui.core import ObjectID
 from pygame_gui.core.interfaces import IContainerLikeInterface, IUIManagerInterface
-from pygame_gui.core import ColourGradient, UIElement
-from pygame_gui.core.utility import render_white_text_alpha_black_bg, apply_colour_to_surface
-from pygame_gui.core.utility import basic_blit
+from pygame_gui.core import UIElement
+from pygame_gui.core.drawable_shapes import RectDrawableShape
 
 
 class UILabel(UIElement):
@@ -47,6 +47,11 @@ class UILabel(UIElement):
                                parent_element=parent_element,
                                object_id=object_id,
                                element_id='label')
+
+        self.dynamic_width = False
+        self.dynamic_height = False
+        self.dynamic_dimensions_orig_top_left = relative_rect.topleft
+
         self.text = text
 
         # initialise theme params
@@ -57,9 +62,13 @@ class UILabel(UIElement):
         self.disabled_text_colour = None
         self.text_shadow_colour = None
 
-        self.text_shadow = False
-        self.text_shadow_size = 1
+        self.text_shadow_size = 0
         self.text_shadow_offset = (0, 0)
+
+        self.text_horiz_alignment = 'center'
+        self.text_vert_alignment = 'center'
+        self.text_horiz_alignment_padding = 0
+        self.text_vert_alignment_padding = 0
 
         self.rebuild_from_changed_theme_data()
 
@@ -72,7 +81,10 @@ class UILabel(UIElement):
         """
         if text != self.text:
             self.text = text
-            self.rebuild()
+            if self.dynamic_width:
+                self.rebuild()
+            else:
+                self.drawable_shape.set_text(translate(self.text))
 
     def rebuild(self):
         """
@@ -80,95 +92,68 @@ class UILabel(UIElement):
         the displayed text is or remake it with different theming (if the theming has changed).
         """
 
-        text_size = self.font.size(self.text)
-        if text_size[1] > self.relative_rect.height or text_size[0] > self.relative_rect.width:
+        self.rect.width = -1 if self.dynamic_width else self.rect.width
+        self.relative_rect.width = -1 if self.dynamic_width else self.relative_rect.width
+
+        self.rect.height = -1 if self.dynamic_height else self.rect.height
+        self.relative_rect.height = -1 if self.dynamic_height else self.relative_rect.height
+
+        text_size = self.font.get_rect(translate(self.text)).size
+        if ((self.rect.height != -1 and text_size[1] > self.relative_rect.height) or
+                (self.rect.width != -1 and text_size[0] > self.relative_rect.width)):
             width_overlap = self.relative_rect.width - text_size[0]
             height_overlap = self.relative_rect.height - text_size[1]
             warn_text = ('Label Rect is too small for text: '
-                         '' + self.text + ' - size diff: ' + str((width_overlap, height_overlap)))
+                         '' + translate(self.text) + ' - size diff: ' + str((width_overlap,
+                                                                             height_overlap)))
             warnings.warn(warn_text, UserWarning)
 
-        new_image = pygame.surface.Surface(self.relative_rect.size,
-                                           flags=pygame.SRCALPHA,
-                                           depth=32)
+        theming_parameters = {'normal_bg': self.bg_colour,
+                              'normal_text': self.text_colour,
+                              'normal_text_shadow': self.text_shadow_colour,
+                              'normal_border': self.bg_colour,
+                              'disabled_text': self.disabled_text_colour,
+                              'disabled_text_shadow': self.text_shadow_colour,
+                              'disabled_border': self.bg_colour,
+                              'disabled_bg': self.bg_colour,
+                              'border_width': 0,
+                              'shadow_width': 0,
+                              'font': self.font,
+                              'text': translate(self.text),
+                              'text_shadow': (self.text_shadow_size,
+                                              self.text_shadow_offset[0],
+                                              self.text_shadow_offset[1],
+                                              self.text_shadow_colour,
+                                              False),
+                              'text_horiz_alignment': self.text_horiz_alignment,
+                              'text_vert_alignment': self.text_vert_alignment,
+                              'text_horiz_alignment_padding': self.text_horiz_alignment_padding,
+                              'text_vert_alignment_padding': self.text_vert_alignment_padding}
 
-        if isinstance(self.bg_colour, ColourGradient):
-            new_image.fill(pygame.Color('#FFFFFFFF'))
-            self.bg_colour.apply_gradient_to_surface(new_image)
-            text_render = render_white_text_alpha_black_bg(self.font, self.text)
-            if self.is_enabled:
-                if isinstance(self.text_colour, ColourGradient):
-                    self.text_colour.apply_gradient_to_surface(text_render)
-                else:
-                    apply_colour_to_surface(self.text_colour, text_render)
-            else:
-                if isinstance(self.disabled_text_colour, ColourGradient):
-                    self.disabled_text_colour.apply_gradient_to_surface(text_render)
-                else:
-                    apply_colour_to_surface(self.disabled_text_colour, text_render)
-        else:
-            new_image.fill(self.bg_colour)
-            if self.is_enabled:
-                if isinstance(self.text_colour, ColourGradient):
-                    text_render = render_white_text_alpha_black_bg(self.font, self.text)
-                    self.text_colour.apply_gradient_to_surface(text_render)
-                else:
-                    if self.bg_colour.a != 255 or self.text_shadow:
-                        text_render = render_white_text_alpha_black_bg(self.font, self.text)
-                        apply_colour_to_surface(self.text_colour, text_render)
-                    else:
-                        text_render = self.font.render(self.text, True,
-                                                       self.text_colour, self.bg_colour)
-                        text_render = text_render.convert_alpha()
-            else:
-                if isinstance(self.disabled_text_colour, ColourGradient):
-                    text_render = render_white_text_alpha_black_bg(self.font, self.text)
-                    self.disabled_text_colour.apply_gradient_to_surface(text_render)
-                else:
-                    if self.bg_colour.a != 255 or self.text_shadow:
-                        text_render = render_white_text_alpha_black_bg(self.font, self.text)
-                        apply_colour_to_surface(self.disabled_text_colour, text_render)
-                    else:
-                        text_render = self.font.render(self.text, True,
-                                                       self.disabled_text_colour, self.bg_colour)
-                        text_render = text_render.convert_alpha()
-        text_render_rect = text_render.get_rect(centerx=int(self.rect.width / 2),
-                                                centery=int(self.rect.height / 2))
+        self.drawable_shape = RectDrawableShape(self.rect, theming_parameters,
+                                                ['normal', 'disabled'], self.ui_manager)
+        self.on_fresh_drawable_shape_ready()
 
-        if self.text_shadow:
-            self._rebuild_shadow(new_image, text_render_rect)
+        if self.relative_rect.width == -1 or self.relative_rect.height == -1:
+            self.dynamic_width = self.relative_rect.width == -1
+            self.dynamic_height = self.relative_rect.height == -1
 
-        basic_blit(new_image, text_render, text_render_rect)
+            self.set_dimensions(self.image.get_size())
 
-        self.set_image(new_image)
+            # if we have anchored the left side of our button to the right of it's container then
+            # changing the width is going to mess up the horiz position as well.
+            new_left = self.relative_rect.left
+            new_top = self.relative_rect.top
+            if self.anchors['left'] == 'right' and self.dynamic_width:
+                left_offset = self.dynamic_dimensions_orig_top_left[0]
+                new_left = left_offset - self.relative_rect.width
+            # if we have anchored the top side of our button to the bottom of it's container then
+            # changing the height is going to mess up the vert position as well.
+            if self.anchors['top'] == 'bottom' and self.dynamic_height:
+                top_offset = self.dynamic_dimensions_orig_top_left[1]
+                new_top = top_offset - self.relative_rect.height
 
-    def _rebuild_shadow(self, new_image, text_render_rect):
-        shadow_text_render = render_white_text_alpha_black_bg(self.font, self.text)
-        apply_colour_to_surface(self.text_shadow_colour, shadow_text_render)
-        for y_pos in range(-self.text_shadow_size, self.text_shadow_size + 1):
-            shadow_text_rect = pygame.Rect((text_render_rect.x + self.text_shadow_offset[0],
-                                            text_render_rect.y + self.text_shadow_offset[1]
-                                            + y_pos),
-                                           text_render_rect.size)
-            basic_blit(new_image, shadow_text_render, shadow_text_rect)
-        for x_pos in range(-self.text_shadow_size, self.text_shadow_size + 1):
-            shadow_text_rect = pygame.Rect((text_render_rect.x + self.text_shadow_offset[0]
-                                            + x_pos,
-                                            text_render_rect.y + self.text_shadow_offset[1]),
-                                           text_render_rect.size)
-            basic_blit(new_image, shadow_text_render, shadow_text_rect)
-        for x_and_y in range(-self.text_shadow_size, self.text_shadow_size + 1):
-            shadow_text_rect = pygame.Rect(
-                (text_render_rect.x + self.text_shadow_offset[0] + x_and_y,
-                 text_render_rect.y + self.text_shadow_offset[1] + x_and_y),
-                text_render_rect.size)
-            basic_blit(new_image, shadow_text_render, shadow_text_rect)
-        for x_and_y in range(-self.text_shadow_size, self.text_shadow_size + 1):
-            shadow_text_rect = pygame.Rect(
-                (text_render_rect.x + self.text_shadow_offset[0] - x_and_y,
-                 text_render_rect.y + self.text_shadow_offset[1] + x_and_y),
-                text_render_rect.size)
-            basic_blit(new_image, shadow_text_render, shadow_text_rect)
+            self.set_relative_position((new_left, new_top))
 
     def rebuild_from_changed_theme_data(self):
         """
@@ -205,21 +190,8 @@ class UILabel(UIElement):
             self.text_shadow_colour = text_shadow_colour
             any_changed = True
 
-        def parse_to_bool(str_data: str):
-            return bool(int(str_data))
-
-        if self._check_misc_theme_data_changed(attribute_name='text_shadow',
-                                               default_value=False,
-                                               casting_func=parse_to_bool):
-            any_changed = True
-
         if self._check_misc_theme_data_changed(attribute_name='text_shadow_size',
-                                               default_value=1,
-                                               casting_func=int):
-            any_changed = True
-
-        if self._check_misc_theme_data_changed(attribute_name='text_shadow_size',
-                                               default_value=1,
+                                               default_value=0,
                                                casting_func=int):
             any_changed = True
 
@@ -231,22 +203,42 @@ class UILabel(UIElement):
                                                casting_func=tuple_extract):
             any_changed = True
 
+        if self._check_text_alignment_theming():
+            any_changed = True
+
         if any_changed:
             self.rebuild()
 
-    def set_dimensions(self, dimensions: Union[pygame.math.Vector2,
-                                               Tuple[int, int],
-                                               Tuple[float, float]]):
+    def _check_text_alignment_theming(self) -> bool:
         """
-        Method to directly set the dimensions of a label.
+        Checks for any changes in the theming data related to text alignment.
 
-        :param dimensions: The new dimensions to set.
+        :return: True if changes found.
 
         """
-        super().set_dimensions(dimensions)
+        has_any_changed = False
 
-        if dimensions[0] >= 0 and dimensions[1] >= 0:
-            self.rebuild()
+        if self._check_misc_theme_data_changed(attribute_name='text_horiz_alignment',
+                                               default_value='center',
+                                               casting_func=str):
+            has_any_changed = True
+
+        if self._check_misc_theme_data_changed(attribute_name='text_horiz_alignment_padding',
+                                               default_value=0,
+                                               casting_func=int):
+            has_any_changed = True
+
+        if self._check_misc_theme_data_changed(attribute_name='text_vert_alignment',
+                                               default_value='center',
+                                               casting_func=str):
+            has_any_changed = True
+
+        if self._check_misc_theme_data_changed(attribute_name='text_vert_alignment_padding',
+                                               default_value=0,
+                                               casting_func=int):
+            has_any_changed = True
+
+        return has_any_changed
 
     def disable(self):
         """
@@ -254,7 +246,7 @@ class UILabel(UIElement):
         """
         if self.is_enabled:
             self.is_enabled = False
-            self.rebuild()
+            self.drawable_shape.set_active_state('disabled')
 
     def enable(self):
         """
@@ -262,4 +254,15 @@ class UILabel(UIElement):
         """
         if not self.is_enabled:
             self.is_enabled = True
+            self.drawable_shape.set_active_state('normal')
+
+    def on_locale_changed(self):
+        font = self.ui_theme.get_font(self.combined_element_ids)
+        if font != self.font:
+            self.font = font
             self.rebuild()
+        else:
+            if self.dynamic_width:
+                self.rebuild()
+            else:
+                self.drawable_shape.set_text(translate(self.text))
