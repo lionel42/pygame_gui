@@ -55,9 +55,11 @@ class TestUITextBox:
                                        'ipsum dolor sit amet</b></font>,'
                                        ' <b><a href="test">consectetur</a></b> adipiscing elit. in a flibb de '
                                        'dib do '
-                                       'rub a la clob slip the perry tin fo glorp yip dorp'
-                                       'skorp si pork flum de dum be dung, slob be robble glurp destination flum'
-                                       ' kin slum. '
+                                       '<p>rub a la clob slip the perry tin fo glorp yip dorp'
+                                       'skorp si pork flum de dum be '
+                                       '<shadow size=1 offset=0,0 color=#306090>dung</shadow>, '
+                                       'slob be robble glurp destination flum'
+                                       ' kin slum. </p>'
                                        'Ram slim gordo, fem tulip squirrel slippers save socks certainly.<br>'
                                        'Vestibulum in <i>commodo me</i> tellus in nisi finibus a sodales.<br>'
                                        'Vestibulum'
@@ -67,6 +69,12 @@ class TestUITextBox:
                                        'Nulla at pulvinar a odio, a dictum dolor.<br>Maecenas at <font size=6><b>'
                                        'tellus a'
                                        'tortor. a<br>'
+                                       '<img src="tests/data/images/test_emoji.png" float=left '
+                                       'padding="5px 10px 5px 5px">'
+                                       '<img src="tests/data/images/test_emoji.png" float=right '
+                                       'padding="5px 10px">'
+                                       '<img src="tests/data/images/test_emoji.png" '
+                                       'padding="5px">'
                                        'In <i>bibendum</i> orci et velit</b> gravida lacinia.<br><br>'
                                        'In hac a habitasse to platea dictumst.<br>'
                                        '<font color=#4CD656 size=4>Vivamus I interdum mollis lacus nec porttitor.'
@@ -367,7 +375,7 @@ class TestUITextBox:
                              relative_rect=pygame.Rect(100, 100, 150, 100),
                              manager=default_ui_manager)
         text_box.set_active_effect(pygame_gui.TEXT_EFFECT_TYPING_APPEAR)
-        text_box.active_text_effect.text_block_changed = True
+        text_box.active_text_effect.text_changed = True
         text_box.update(5.0)
         assert type(text_box.active_text_effect) == pygame_gui.core.text.TypingAppearEffect
 
@@ -457,8 +465,8 @@ class TestUITextBox:
                                      pygame.Rect((0, 0), (250, 200)),
                                      manager=manager,
                                      object_id="#text_box_2")
-        htm_text_block_2.set_active_effect('typing_appear')
-        htm_text_block_2.active_text_effect.text_block_changed = True
+        htm_text_block_2.set_active_effect(pygame_gui.TEXT_EFFECT_TYPING_APPEAR)
+        htm_text_block_2.active_text_effect.text_changed = True
         htm_text_block_2.update(5.0)
         htm_text_block_2.update(5.0)
         assert type(htm_text_block_2.active_text_effect) == pygame_gui.core.text.TypingAppearEffect

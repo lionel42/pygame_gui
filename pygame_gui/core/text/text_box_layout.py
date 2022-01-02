@@ -11,9 +11,12 @@ from pygame_gui.core.text.text_layout_rect import TextLayoutRect, TextFloatPosit
 from pygame_gui.core.text.line_break_layout_rect import LineBreakLayoutRect
 from pygame_gui.core.text.hyperlink_text_chunk import HyperlinkTextChunk
 from pygame_gui.core.text.text_line_chunk import TextLineChunkFTFont
+from pygame_gui.core.text.image_layout_rect import ImageLayoutRect
 
 from pygame_gui.core.text.text_box_layout_row import TextBoxLayoutRow
 from pygame_gui.core.text.html_parser import HTMLParser
+
+from pygame_gui.core.utility import basic_blit
 
 
 class TextBoxLayout:
@@ -46,7 +49,7 @@ class TextBoxLayout:
         self.layout_rect_queue = None
         self.finalised_surface = None
         self.floating_rects: List[TextLayoutRect] = []
-        self.layout_rows = []
+        self.layout_rows: List[TextBoxLayoutRow] = []
         self.row_lengths = []
         self.link_chunks = []
         self.letter_count = 0
@@ -102,7 +105,16 @@ class TextBoxLayout:
             elif text_layout_rect.should_span():
                 current_row = self._handle_span_rect(current_row, text_layout_rect)
             elif text_layout_rect.float_pos() != TextFloatPosition.NONE:
-                current_row = self._handle_float_rect(current_row, text_layout_rect, input_queue)
+                if (isinstance(text_layout_rect, ImageLayoutRect) and
+                        text_layout_rect.width > self.layout_rect.width):
+                    warnings.warn('Image at path: ' +
+                                  text_layout_rect.image_path +
+                                  ' too wide for text layout. Layout width = ' +
+                                  str(self.layout_rect.width) + ', Image width = ' +
+                                  str(text_layout_rect.width))
+                else:
+                    current_row = self._handle_float_rect(current_row, text_layout_rect,
+                                                          input_queue)
             else:
                 current_row = self._handle_regular_rect(current_row, text_layout_rect, input_queue)
         # make sure we add the last row to the layout
@@ -304,15 +316,23 @@ class TextBoxLayout:
 
         self.finalised_surface = surface
 
-        # pygame.draw.rect(self.finalised_surface, pygame.Color('#00FF00'), self.layout_rect, 1)
+    def blit_finalised_text_to_surf(self, surface: Surface):
+        """
+        Lets us blit a finalised text surface to an arbitrary surface.
+        Useful for doing stuff with text effects.
+
+        :param surface: the target surface to blit onto.
+        """
+        if self.finalised_surface is not None:
+            basic_blit(surface, self.finalised_surface, (0, 0))
 
     def finalise_to_new(self):
         """
         Finalises our layout to a brand new surface that this method creates.
         """
-        self.finalised_surface = pygame.Surface((self.layout_rect.width + self.edit_buffer,
-                                                 self.layout_rect.height),
-                                                depth=32, flags=pygame.SRCALPHA)
+        self.finalised_surface = pygame.surface.Surface((self.layout_rect.width + self.edit_buffer,
+                                                         self.layout_rect.height),
+                                                        depth=32, flags=pygame.SRCALPHA)
         self.finalised_surface.fill('#00000000')
         self.finalise_to_surf(self.finalised_surface)
 
@@ -833,3 +853,23 @@ class TextBoxLayout:
                 else:
                     for row in self.layout_rows[last_row.row_index:]:
                         row.finalise(self.finalised_surface)
+
+    def redraw_other_chunks(self, not_these_chunks):
+        """
+        Useful for text effects.
+        TODO: no idea how this will play with images? Probably badly.
+
+        :param not_these_chunks: The chunks not to redraw
+        :return:
+        """
+        for row in self.layout_rows:
+            for chunk in row.items:
+                if chunk not in not_these_chunks and isinstance(chunk, TextLineChunkFTFont):
+                    chunk.redraw()
+
+    def clear_effects(self):
+        """
+        Clear text layout level text effect parameters.
+        """
+        self.alpha = 255
+        self.current_end_pos = self.letter_count

@@ -2,8 +2,8 @@
 Documentation - Home Page
 ===================================================
 
-Pygame GUI is a module to help you make graphical user interfaces in for games written in pygame 2. The module is firmly
-forward looking and designed to work with Pygame 2 and Python 3.
+Pygame GUI is a module to help you make graphical user interfaces for games written in pygame. The module is firmly
+forward looking and is designed to work on Pygame 2 and Python 3.
 
 
 Features
